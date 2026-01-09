@@ -1,0 +1,50 @@
+name: Create Release Branches
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version (e.g. 1.0.0)'
+        required: true
+      base_branch:
+        description: 'Base branch'
+        default: 'main'
+        required: true
+
+jobs:
+  create-branches:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout orchestrator repo
+        uses: actions/checkout@v4
+
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install gh -y
+
+      - name: Authenticate GH CLI
+        env:
+          GH_TOKEN: ${{ secrets.ORG_GITHUB_TOKEN }}
+        run: |
+          gh auth status
+
+      - name: Create release branches
+        env:
+          GH_TOKEN: ${{ secrets.ORG_GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          BASE_BRANCH: ${{ inputs.base_branch }}
+        run: |
+          while read repo; do
+            echo "Processing $repo"
+
+            BASE_SHA=$(gh api repos/$repo/git/ref/heads/$BASE_BRANCH --jq .object.sha)
+
+            gh api \
+              -X POST \
+              repos/$repo/git/refs \
+              -f ref="refs/heads/release/$RELEASE_VERSION" \
+              -f sha="$BASE_SHA"
+
+          done < repos.txt
